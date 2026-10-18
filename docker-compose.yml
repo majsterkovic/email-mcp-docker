@@ -1,0 +1,97 @@
+services:
+  # Mode 1: plain STDIO (no ports).
+  # Used by `docker run -i` from opencode / Claude Code / Desktop.
+  # You do not need to keep it up via `compose up` permanently.
+  imap-mcp:
+    build:
+      context: .
+      args:
+        MCP_VERSION: ${MCP_VERSION:-latest}
+    image: imap-email-mcp:local
+    env_file:
+      - .env.gmail
+    stdin_open: true
+    tty: false
+    restart: "no"
+
+  # Mode 2: local HTTP/SSE server for LLMs.
+  # The LLM connects over the network to http://localhost:3000/sse
+  imap-mcp-sse:
+    build:
+      context: .
+      args:
+        MCP_VERSION: ${MCP_VERSION:-latest}
+    image: imap-email-mcp:local
+    env_file:
+      - .env.gmail
+    entrypoint: ["dumb-init", "--", "supergateway"]
+    # stdio -> SSE bridge
+    command:
+      - --stdio
+      - imap-email-mcp
+      - --port
+      - "3000"
+      - --baseUrl
+      - http://localhost:3000
+      - --ssePath
+      - /sse
+      - --messagePath
+      - /message
+      - --cors
+      - "*"
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/sse"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Outlook via OAuth (device-code) - better-email-mcp.
+  # The old idea (imap-email-mcp + password) does not work: Microsoft disabled
+  # password login on IMAP ("Logging in is disabled on this server").
+  # OAuth tokens are stored in ./better-email-data (never commit!).
+  #
+  # Step 1 (one-off, interactive - prints a Microsoft code + link):
+  #   docker compose --profile outlook up better-email-auth
+  #   -> open the link in a browser, enter the code, sign in to Microsoft
+  # Step 2 (MCP stdio server for the LLM, uses the stored token):
+  #   docker run -i --rm --user 1000:1000 --entrypoint better-email-mcp \
+  #     -v ./better-email-data:/home/node/.better-email-mcp \
+  #     -e EMAIL_CREDENTIALS="you@outlook.com:oauth-token-in-store" imap-email-mcp:local
+  better-email-auth:
+    build:
+      context: .
+      args:
+        MCP_VERSION: ${MCP_VERSION:-latest}
+        BETTER_EMAIL_VERSION: ${BETTER_EMAIL_VERSION:-latest}
+    image: imap-email-mcp:local
+    # uid 1000 so files in ./better-email-data stay writable by the host user
+    user: "1000:1000"
+    entrypoint: ["dumb-init", "--", "better-email-mcp"]
+    command: ["auth", "${OUTLOOK_EMAIL:-you@outlook.com}"]
+    volumes:
+      - ./better-email-data:/home/node/.better-email-mcp
+    stdin_open: true
+    tty: true
+    restart: "no"
+    profiles: ["outlook"]
+
+  better-email-outlook:
+    build:
+      context: .
+      args:
+        MCP_VERSION: ${MCP_VERSION:-latest}
+        BETTER_EMAIL_VERSION: ${BETTER_EMAIL_VERSION:-latest}
+    image: imap-email-mcp:local
+    # uid 1000 so files in ./better-email-data stay writable by the host user
+    user: "1000:1000"
+    entrypoint: ["dumb-init", "--", "better-email-mcp"]
+    volumes:
+      - ./better-email-data:/home/node/.better-email-mcp
+    stdin_open: true
+    tty: false
+    restart: "no"
+    profiles: ["outlook"]

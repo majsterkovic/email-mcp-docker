@@ -1,0 +1,41 @@
+{
+  "mcp": {
+    "imap-gmail-stdio": {
+      "type": "local",
+      "command": [
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "--env-file",
+        "/path/to/email-mcp-docker/.env.gmail",
+        "imap-email-mcp:local"
+      ],
+      "enabled": true
+    },
+    "imap-gmail-sse": {
+      "type": "remote",
+      "url": "http://localhost:3000/sse",
+      "enabled": false
+    },
+    "imap-outlook-better-email": {
+      "type": "local",
+      "command": [
+        "docker",
+        "run",
+        "-i",
+        "--rm",
+        "--user",
+        "1000:1000",
+        "--entrypoint",
+        "better-email-mcp",
+        "-v",
+        "/path/to/email-mcp-docker/better-email-data:/home/node/.better-email-mcp",
+        "-e",
+        "EMAIL_CREDENTIALS=you@outlook.com:oauth-token-in-store",
+        "imap-email-mcp:local"
+      ],
+      "enabled": true
+    }
+  }
+}

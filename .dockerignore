@@ -1,0 +1,6 @@
+# Local build only; not needed when installing from npm
+node_modules/
+npm-debug.log
+.git/
+.env*
+better-email-data/
